@@ -7,3 +7,7 @@ aws.login
 
 # History directory
 .history/
+
+tmp/
+docs/
+
