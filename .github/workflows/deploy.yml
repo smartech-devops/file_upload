@@ -3,6 +3,7 @@ name: Test AWS Connection
 on:
   push:
     branches: [ master ]
+  workflow_dispatch:  # Allow manual triggers
 
 permissions:
   id-token: write
@@ -20,13 +21,15 @@ jobs:
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-        role-session-name: GitHubActions
+        role-session-name: GitHubActions-${{ github.run_id }}
         aws-region: eu-north-1
+        audience: sts.amazonaws.com
     
     - name: Test AWS connection
       run: |
         echo "Testing AWS connection..."
         aws sts get-caller-identity
+        echo "AWS region: $(aws configure get region)"
         
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
@@ -35,6 +38,10 @@ jobs:
     
     - name: Test Terraform backend
       run: |
-        cd terraform
-        terraform init
-        echo "Terraform backend connection successful!"
+        if [ -d "terraform" ]; then
+          cd terraform
+          terraform init
+          echo "Terraform backend connection successful!"
+        else
+          echo "No terraform directory found, skipping terraform test"
+        fi

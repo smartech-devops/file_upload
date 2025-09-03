@@ -19,7 +19,7 @@ echo "Creating GitHub OIDC provider..."
 aws iam create-open-id-connect-provider \
   --url https://token.actions.githubusercontent.com \
   --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1 \
+  --thumbprint-list 1c58a3a8518e8759bf075b76b750d4f2df264fcd \
   2>/dev/null || echo "OIDC provider already exists, skipping..."
 
 echo "Creating trust policy..."
