@@ -1,0 +1,9 @@
+# AWS login file
+aws.login
+
+# Lock files (temporary files created by various editors)
+.~*
+*~
+
+# History directory
+.history/
