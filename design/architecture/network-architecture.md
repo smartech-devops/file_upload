@@ -39,14 +39,16 @@ The CSV processor application uses a multi-VPC architecture with VPC peering to 
 ### Internet Connectivity
 
 #### Internet Gateways
-- **Lambda IGW**: Provides internet access to Lambda VPC public subnets
-- **RDS IGW**: Provides internet access to RDS VPC public subnets
+- **Lambda IGW**: Provides internet access to Lambda VPC public subnets (for management)
+- **RDS IGW**: Provides internet access to RDS VPC public subnets (for management)
 
 #### Route Tables
 - **Lambda Public Route Table**:
   - `0.0.0.0/0` → Lambda IGW (internet access)
+  - `10.1.0.0/16` → VPC Peering Connection (RDS VPC access)
 - **Lambda Private Route Table**:
   - `10.1.0.0/16` → VPC Peering Connection (RDS VPC access)
+  - S3 Gateway Endpoint routes (managed automatically)
 - **RDS Public Route Table**:
   - `0.0.0.0/0` → RDS IGW (internet access)
 - **RDS Private Route Table**:
@@ -57,21 +59,51 @@ The CSV processor application uses a multi-VPC architecture with VPC peering to 
 #### Lambda ↔ RDS Peering
 - **Connection**: Bidirectional VPC peering between Lambda and RDS VPCs
 - **Auto Accept**: Enabled
+- **DNS Resolution**: Accepter VPC allows requester VPC DNS resolution
 - **Purpose**: Allows Lambda functions to communicate with RDS database
 - **Routes**:
   - Lambda VPC can reach `10.1.0.0/16` (RDS VPC)
   - RDS VPC can reach `10.0.0.0/16` (Lambda VPC)
 
+### VPC Endpoints (AWS PrivateLink)
+
+#### S3 Gateway Endpoint
+- **Type**: Gateway Endpoint (no additional cost)
+- **Associated Route Tables**: Lambda Private Route Table
+- **Purpose**: Private S3 access for Lambda functions
+- **Services**: All S3 operations (GetObject, PutObject, CopyObject, ListBucket)
+
+#### Secrets Manager Interface Endpoint
+- **Type**: Interface Endpoint with ENI
+- **Subnets**: Lambda private subnets (both AZs)
+- **Security Group**: VPC Endpoints Security Group
+- **Private DNS**: Enabled
+- **Purpose**: Secure database credential retrieval
+- **Cost**: ~$7.20/month + data processing charges
+
+#### SNS Interface Endpoint
+- **Type**: Interface Endpoint with ENI
+- **Subnets**: Lambda private subnets (both AZs)
+- **Security Group**: VPC Endpoints Security Group
+- **Private DNS**: Enabled
+- **Purpose**: Email notifications via SNS
+- **Cost**: ~$7.20/month + data processing charges
+
 ### Security Groups
 
 #### Lambda Security Group
 - **Egress**: All traffic allowed (`0.0.0.0/0`)
-- **Purpose**: Allows Lambda functions to make outbound connections
+- **Purpose**: Allows Lambda functions to make outbound connections to VPC endpoints and RDS
 
 #### RDS Security Group
 - **Ingress**: PostgreSQL (port 5432) from Lambda VPC (`10.0.0.0/16`)
 - **Egress**: All traffic allowed (`0.0.0.0/0`)
 - **Purpose**: Restricts database access to Lambda functions only
+
+#### VPC Endpoints Security Group
+- **Ingress**: HTTPS (port 443) from Lambda Security Group
+- **Egress**: All traffic allowed (`0.0.0.0/0`)
+- **Purpose**: Allows Lambda to access VPC endpoints securely
 
 ## High Availability Design
 
@@ -96,12 +128,16 @@ The CSV processor application uses a multi-VPC architecture with VPC peering to 
 ### Private Placement
 - **Lambda**: Deployed in private subnets (no direct internet access)
 - **RDS**: Deployed in private subnets (database isolation)
-- **Public Subnets**: Available for load balancers, NAT gateways, bastion hosts
+- **VPC Endpoints**: Interface endpoints in private subnets
+- **Public Subnets**: Available for management resources, load balancers, bastion hosts
 
-### Traffic Flow
-1. **Inbound**: Internet → ALB (public subnet) → Lambda (private subnet)
-2. **Lambda-RDS**: Lambda (private subnet) → VPC Peering → RDS (private subnet)
-3. **Outbound**: Lambda (private subnet) → NAT Gateway (public subnet) → IGW → Internet
+### Traffic Flow (Updated Architecture)
+1. **S3 Trigger**: S3 Event → Lambda (private subnet)
+2. **Lambda-S3**: Lambda → S3 Gateway Endpoint (private)
+3. **Lambda-Secrets**: Lambda → Secrets Manager VPC Endpoint (private)
+4. **Lambda-RDS**: Lambda (private subnet) → VPC Peering → RDS (private subnet)
+5. **Lambda-SNS**: Lambda → SNS VPC Endpoint (private)
+6. **No Internet**: Lambda has no internet access - all AWS services via VPC endpoints
 
 ## Scalability Features
 
@@ -110,10 +146,16 @@ The CSV processor application uses a multi-VPC architecture with VPC peering to 
 - **Load Balancing**: Public subnets support ALB/NLB deployment
 - **Database**: RDS can be configured for read replicas across AZs
 
+### Current Enhancements Implemented
+- **VPC Endpoints**: ✅ S3, Secrets Manager, and SNS endpoints for private AWS access
+- **Private DNS**: ✅ Enabled for automatic DNS resolution to VPC endpoints
+- **Enhanced Security**: ✅ No internet access required for Lambda functions
+
 ### Future Enhancements
-- **NAT Gateways**: Can be added to public subnets for private subnet internet access
-- **VPC Endpoints**: Can be added for AWS service access without internet routing
+- **NAT Gateways**: Can be added if external internet access is needed
+- **Additional VPC Endpoints**: CloudWatch Logs, Lambda API for enhanced monitoring
 - **Additional VPCs**: Architecture supports adding more VPCs with peering connections
+- **Transit Gateway**: For complex multi-VPC architectures
 
 ## Network Diagram
 
@@ -121,31 +163,52 @@ The CSV processor application uses a multi-VPC architecture with VPC peering to 
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              AWS Cloud                                      │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  ┌───────────────────────────────┐    ┌──────────────────────────────────┐  │
-│  │        Lambda VPC             │    │           RDS VPC                │  │
-│  │      (10.0.0.0/16)            │    │        (10.1.0.0/16)            │  │
-│  │                               │    │                                  │  │
-│  │  ┌─────────────────────────┐  │    │  ┌─────────────────────────────┐ │  │
-│  │  │      Public Subnets     │  │    │  │      Public Subnets         │ │  │
-│  │  │  ┌─────────┬─────────┐  │  │    │  │  ┌─────────┬─────────────┐   │ │  │
-│  │  │  │10.0.3.0/│10.0.4.0/│  │  │    │  │  │10.1.3.0/│10.1.4.0/24  │   │ │  │
-│  │  │  │24 (AZ-0)│24 (AZ-1)│  │  │    │  │  │24 (AZ-0)│ (AZ-1)      │   │ │  │
-│  │  │  └─────────┴─────────┘  │  │    │  │  └─────────┴─────────────┘   │ │  │
-│  │  └─────────────────────────┘  │    │  └─────────────────────────────┘ │  │
-│  │           │                   │    │           │                     │  │
-│  │      [Internet Gateway]       │    │      [Internet Gateway]         │  │
-│  │           │                   │    │           │                     │  │
-│  │  ┌─────────────────────────┐  │    │  ┌─────────────────────────────┐ │  │
-│  │  │     Private Subnets     │  │    │  │      Private Subnets        │ │  │
-│  │  │  ┌─────────┬─────────┐  │  │◄──►│  │  ┌─────────┬─────────────┐   │ │  │
-│  │  │  │10.0.1.0/│10.0.2.0/│  │  │    │  │  │10.1.1.0/│10.1.2.0/24  │   │ │  │
-│  │  │  │24 (AZ-0)│24 (AZ-1)│  │  │    │  │  │24 (AZ-0)│ (AZ-1)      │   │ │  │
-│  │  │  │[Lambda] │[Lambda] │  │  │    │  │  │  [RDS]  │   [RDS]     │   │ │  │
-│  │  │  └─────────┴─────────┘  │  │    │  │  └─────────┴─────────────┘   │ │  │
-│  │  └─────────────────────────┘  │    │  └─────────────────────────────┘ │  │
-│  └───────────────────────────────┘    └──────────────────────────────────┘  │
-│                                    VPC Peering                              │
+│  ┌─────────────────────────────────────────┐    ┌──────────────────────────┐  │
+│  │              Lambda VPC                 │    │         RDS VPC          │  │
+│  │            (10.0.0.0/16)                │    │      (10.1.0.0/16)      │  │
+│  │                                         │    │                          │  │
+│  │  ┌─────────────────────────────────┐   │    │  ┌─────────────────────┐ │  │
+│  │  │         Public Subnets          │   │    │  │    Public Subnets   │ │  │
+│  │  │  ┌─────────────┬─────────────┐  │   │    │  │  ┌─────────────────┐ │ │  │
+│  │  │  │10.0.3.0/24  │10.0.4.0/24  │  │   │    │  │  │10.1.3.0/24-    │ │ │  │
+│  │  │  │   (AZ-0)    │   (AZ-1)    │  │   │    │  │  │10.1.4.0/24     │ │ │  │
+│  │  │  └─────────────┴─────────────┘  │   │    │  │  └─────────────────┘ │ │  │
+│  │  └─────────────────────────────────┘   │    │  └─────────────────────┘ │  │
+│  │              │                         │    │              │           │  │
+│  │        [Internet Gateway]              │    │        [Internet Gateway]│  │
+│  │              │                         │    │              │           │  │
+│  │  ┌─────────────────────────────────┐   │    │  ┌─────────────────────┐ │  │
+│  │  │         Private Subnets         │   │    │  │   Private Subnets   │ │  │
+│  │  │  ┌─────────────┬─────────────┐  │   │◄──►│  │  ┌─────────────────┐ │ │  │
+│  │  │  │10.0.1.0/24  │10.0.2.0/24  │  │   │    │  │  │10.1.1.0/24-    │ │ │  │
+│  │  │  │   (AZ-0)    │   (AZ-1)    │  │   │    │  │  │10.1.2.0/24     │ │ │  │
+│  │  │  │   [Lambda]  │   [Lambda]  │  │   │    │  │  │     [RDS]       │ │ │  │
+│  │  │  │             │             │  │   │    │  │  └─────────────────┘ │ │  │
+│  │  │  │  ┌─────────────────────────┤  │   │    │  └─────────────────────┘ │  │
+│  │  │  │  │   VPC Endpoints         │  │   │    │                          │  │
+│  │  │  │  │ • S3 (Gateway)          │  │   │    │                          │  │
+│  │  │  │  │ • Secrets Mgr (ENI)     │  │   │    │                          │  │
+│  │  │  │  │ • SNS (ENI)             │  │   │    │                          │  │
+│  │  │  │  │ • Private DNS Enabled   │  │   │    │                          │  │
+│  │  │  │  └─────────────────────────┤  │   │    │                          │  │
+│  │  │  └─────────────┴─────────────┘  │   │    │                          │  │
+│  │  └─────────────────────────────────┘   │    │                          │  │
+│  │                                         │    │                          │  │
+│  │              ▲                         │    │                          │  │
+│  │              │ Private AWS Network     │    │                          │  │
+│  │         ┌────┴────┐                    │    │                          │  │
+│  │         │   S3    │ (Trigger)          │    │                          │  │
+│  │         │ Buckets │                    │    │                          │  │
+│  │         └─────────┘                    │    │                          │  │
+│  └─────────────────────────────────────────┘    └──────────────────────────┘  │
+│                               VPC Peering (DNS Resolution Enabled)           │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+Traffic Flow (All Private):
+Lambda → S3: Via Gateway Endpoint
+Lambda → Secrets Manager: Via Interface Endpoint + Private DNS
+Lambda → RDS: Via VPC Peering
+Lambda → SNS: Via Interface Endpoint + Private DNS
 ```
 
 ## Resource Naming Convention
