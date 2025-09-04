@@ -72,6 +72,23 @@
 - LocalStack for local AWS services simulation
 - Pre-commit hooks for code quality
 
+### Hybrid Infrastructure Management
+- **Current**: Full Terraform for all infrastructure including Lambda
+- **Future**: Serverless Framework for Lambda only, Terraform for everything else
+- **Architecture**:
+  - **Terraform**: VPC, RDS, S3 buckets, IAM roles, security groups, networking
+  - **Serverless**: Lambda function deployment, packaging, and configuration only
+- **Benefits**: 
+  - Best tool for each job - Terraform for infrastructure, Serverless for Lambda
+  - Simplified Lambda development and dependency management
+  - Automatic packaging and deployment for Lambda functions
+  - Keep existing Terraform infrastructure unchanged
+- **Implementation**:
+  - Create `serverless.yml` for Lambda function only
+  - Remove Lambda resources from Terraform
+  - Use Terraform outputs as inputs to Serverless (bucket names, VPC IDs, etc.)
+  - Maintain single deployment pipeline with both tools
+
 ### Testing Strategy
 - Unit tests for Lambda function logic
 - Integration tests with test database

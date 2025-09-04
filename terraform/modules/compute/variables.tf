@@ -19,7 +19,7 @@ variable "handler" {
 variable "runtime" {
   description = "Lambda function runtime"
   type        = string
-  default     = "python3.9"
+  default     = "python3.12"
 }
 
 variable "timeout" {

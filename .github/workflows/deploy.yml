@@ -30,9 +30,6 @@ jobs:
         echo "Connected as:"
         aws sts get-caller-identity
         
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-    
     - name: Package Lambda function
       run: |
         # Create a temporary directory for Lambda package
