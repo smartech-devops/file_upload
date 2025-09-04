@@ -35,10 +35,27 @@ jobs:
     
     - name: Package Lambda function
       run: |
+        # Create a temporary directory for Lambda package
+        mkdir -p lambda-package
+        
+        # Copy Lambda function code
+        cp lambda/lambda_function.py lambda-package/
+        
+        # Install dependencies using uv
         cd lambda
-        uv add boto3 psycopg2-binary
+        uv sync
+        
+        # Copy installed packages to lambda-package
+        cp -r .venv/lib/python*/site-packages/* ../lambda-package/
+        
+        # Create deployment zip
+        cd ../lambda-package
         zip -r ../lambda-deployment.zip .
-        echo "Lambda package created: $(ls -lh ../lambda-deployment.zip)"
+        cd ..
+        
+        echo "Lambda package created: $(ls -lh lambda-deployment.zip)"
+        echo "Package contents (first 20 files):"
+        unzip -l lambda-deployment.zip | head -20
     
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
