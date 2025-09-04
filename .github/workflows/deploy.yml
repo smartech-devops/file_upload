@@ -41,15 +41,11 @@ jobs:
         # Copy Lambda function code
         cp lambda/lambda_function.py lambda-package/
         
-        # Install dependencies using uv
-        cd lambda
-        uv sync
-        
-        # Copy installed packages to lambda-package
-        cp -r .venv/lib/python*/site-packages/* ../lambda-package/
+        # Install dependencies to target directory
+        uv pip install --target lambda-package boto3 psycopg2-binary
         
         # Create deployment zip
-        cd ../lambda-package
+        cd lambda-package
         zip -r ../lambda-deployment.zip .
         cd ..
         
