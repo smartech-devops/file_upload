@@ -14,12 +14,24 @@
       "Effect": "Allow",
       "Action": [
         "s3:GetObject",
-        "s3:PutObject"
+        "s3:PutObject",
+        "s3:CopyObject"
       ],
       "Resource": [
         "${input_bucket_arn}/*",
         "${output_bucket_arn}/*", 
         "${backup_bucket_arn}/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": [
+        "${input_bucket_arn}",
+        "${output_bucket_arn}",
+        "${backup_bucket_arn}"
       ]
     },
     {
