@@ -41,8 +41,8 @@ jobs:
         # Copy Lambda function code
         cp lambda/lambda_function.py lambda-package/
         
-        # Install dependencies from requirements.txt
-        pip install -r requirements.txt --target lambda-package
+        # Install dependencies from lambda requirements.txt
+        pip install -r lambda/requirements.txt --target lambda-package
         
         # Create deployment zip
         cd lambda-package
