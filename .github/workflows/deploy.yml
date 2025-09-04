@@ -1,4 +1,4 @@
-name: Test AWS Connection
+name: Deploy Infrastructure
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  test-connection:
+  deploy:
     runs-on: ubuntu-latest
     
     steps:
@@ -25,23 +25,51 @@ jobs:
         aws-region: eu-north-1
         audience: sts.amazonaws.com
     
-    - name: Test AWS connection
+    - name: Verify AWS connection
       run: |
-        echo "Testing AWS connection..."
+        echo "Connected as:"
         aws sts get-caller-identity
-        echo "AWS region: $(aws configure get region)"
         
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+    
+    - name: Package Lambda function
+      run: |
+        cd lambda
+        uv add boto3 psycopg2-binary
+        zip -r ../lambda-deployment.zip .
+        echo "Lambda package created: $(ls -lh ../lambda-deployment.zip)"
+    
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: latest
     
-    - name: Test Terraform backend
+    - name: Terraform Init
       run: |
-        if [ -d "terraform" ]; then
-          cd terraform
-          terraform init
-          echo "Terraform backend connection successful!"
-        else
-          echo "No terraform directory found, skipping terraform test"
-        fi
+        cd terraform
+        terraform init
+    
+    - name: Terraform Validate
+      run: |
+        cd terraform
+        terraform validate
+    
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan -out=tfplan
+    
+    - name: Terraform Plan Output
+      run: |
+        cd terraform
+        echo "=== Terraform Plan Results ==="
+        terraform show tfplan
+        echo "=============================="
+    
+    - name: Next Steps
+      run: |
+        echo "=== Plan Review Complete ==="
+        echo "Review the plan above and apply manually if everything looks correct"
+        echo "To apply: cd terraform && terraform apply tfplan"
+        echo "============================"
