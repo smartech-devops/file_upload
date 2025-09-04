@@ -114,6 +114,28 @@ def store_file_metadata(filename, rows_count, db_credentials):
         
         cursor = connection.cursor()
         
+        # Create table if it doesn't exist
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS file_metadata (
+            id SERIAL PRIMARY KEY,
+            filename VARCHAR(255) NOT NULL,
+            status VARCHAR(50) NOT NULL,
+            timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            rows_count INTEGER NOT NULL
+        )
+        """
+        cursor.execute(create_table_query)
+        
+        # Create indexes if they don't exist
+        create_indexes = [
+            "CREATE INDEX IF NOT EXISTS idx_file_metadata_filename ON file_metadata(filename)",
+            "CREATE INDEX IF NOT EXISTS idx_file_metadata_timestamp ON file_metadata(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_file_metadata_status ON file_metadata(status)"
+        ]
+        
+        for index_query in create_indexes:
+            cursor.execute(index_query)
+        
         # Insert file metadata
         insert_query = """
         INSERT INTO file_metadata (filename, status, timestamp, rows_count)
