@@ -32,3 +32,25 @@ output "rds_security_group_id" {
   description = "ID of the RDS security group"
   value       = aws_security_group.rds.id
 }
+
+# Public subnet outputs
+output "lambda_public_subnet_ids" {
+  description = "List of Lambda public subnet IDs"
+  value       = [aws_subnet.lambda_public_a.id, aws_subnet.lambda_public_b.id]
+}
+
+output "rds_public_subnet_ids" {
+  description = "List of RDS public subnet IDs"
+  value       = [aws_subnet.rds_public_a.id, aws_subnet.rds_public_b.id]
+}
+
+# Internet gateway outputs
+output "lambda_igw_id" {
+  description = "ID of the Lambda Internet Gateway"
+  value       = aws_internet_gateway.lambda_igw.id
+}
+
+output "rds_igw_id" {
+  description = "ID of the RDS Internet Gateway"
+  value       = aws_internet_gateway.rds_igw.id
+}

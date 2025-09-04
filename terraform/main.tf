@@ -43,7 +43,7 @@ module "storage" {
   source = "./modules/storage"
 }
 
-# Compute Module
+# Compute Module (can be created in parallel with database)
 module "compute" {
   source = "./modules/compute"
   function_name            = "csv-processor"
@@ -57,14 +57,15 @@ module "compute" {
   output_bucket_name = module.storage.output_bucket_name
   backup_bucket_name = module.storage.backup_bucket_name
   
-  # Database information from database module
+  # Database information from database module (only needs secret ARN, not the actual DB)
   db_secret_arn  = module.database.db_secret_arn
   db_secret_name = module.database.db_secret_name
   
   # SNS information from monitoring module
   sns_topic_arn = module.monitoring.sns_topic_arn
 
-  depends_on = [module.networking, module.database, module.storage, module.monitoring]
+  # Only depends on networking, storage, and monitoring - not the actual database instance
+  depends_on = [module.networking, module.storage, module.monitoring]
 }
 
 # S3 Event Notification (after both storage and compute are created)
