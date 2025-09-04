@@ -47,7 +47,7 @@ module "storage" {
 module "compute" {
   source = "./modules/compute"
   function_name            = "csv-processor"
-  lambda_subnet_ids        = module.networking.lambda_subnet_ids
+  lambda_subnet_ids        = module.networking.lambda_public_subnet_ids
   lambda_security_group_id = module.networking.lambda_security_group_id
   
   # S3 bucket information from storage module

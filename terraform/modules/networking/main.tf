@@ -149,13 +149,18 @@ resource "aws_vpc_peering_connection" "lambda_to_rds" {
   }
 }
 
-# Public route tables (only IGW routes, no VPC peering)
+# Public route table with IGW and VPC peering
 resource "aws_route_table" "lambda_public" {
   vpc_id = aws_vpc.lambda_vpc.id
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.lambda_igw.id
+  }
+
+  route {
+    cidr_block                = aws_vpc.rds_vpc.cidr_block
+    vpc_peering_connection_id = aws_vpc_peering_connection.lambda_to_rds.id
   }
 
   tags = {
