@@ -136,6 +136,10 @@ resource "aws_vpc_peering_connection" "lambda_to_rds" {
   peer_vpc_id = aws_vpc.rds_vpc.id
   auto_accept = true
 
+  requester {
+    allow_remote_vpc_dns_resolution = true
+  }
+
   tags = {
     Name = "csv-processor-lambda-to-rds-peering"
   }
