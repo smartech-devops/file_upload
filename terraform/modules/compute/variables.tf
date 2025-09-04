@@ -25,7 +25,7 @@ variable "runtime" {
 variable "timeout" {
   description = "Lambda function timeout in seconds"
   type        = number
-  default     = 60
+  default     = 300
 }
 
 variable "log_retention_days" {
