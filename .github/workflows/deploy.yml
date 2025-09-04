@@ -68,17 +68,17 @@ jobs:
         cd terraform
         terraform validate
     
-    # - name: Terraform Plan
-    #   run: |
-    #     cd terraform
-    #     terraform plan -out=tfplan
+    - name: Terraform Plan
+      run: |
+        cd terraform
+        terraform plan -out=tfplan
     
-    # - name: Terraform Plan Output
-    #   run: |
-    #     cd terraform
-    #     echo "=== Terraform Plan Results ==="
-    #     terraform show tfplan
-    #     echo "=============================="
+    - name: Terraform Plan Output
+      run: |
+        cd terraform
+        echo "=== Terraform Plan Results ==="
+        terraform show tfplan
+        echo "=============================="
     
     - name: Terraform Apply
       run: |
