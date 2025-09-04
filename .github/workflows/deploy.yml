@@ -80,9 +80,14 @@ jobs:
         terraform show tfplan
         echo "=============================="
     
-    - name: Next Steps
+    - name: Terraform Apply
       run: |
-        echo "=== Plan Review Complete ==="
-        echo "Review the plan above and apply manually if everything looks correct"
-        echo "To apply: cd terraform && terraform apply tfplan"
-        echo "============================"
+        cd terraform
+        terraform apply -auto-approve tfplan
+    
+    - name: Output Infrastructure Info
+      run: |
+        cd terraform
+        echo "=== Infrastructure Deployed ==="
+        terraform output
+        echo "================================"
