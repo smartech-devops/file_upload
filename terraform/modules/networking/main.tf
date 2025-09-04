@@ -346,6 +346,7 @@ resource "aws_vpc_endpoint" "secrets_manager" {
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.lambda_private_a.id, aws_subnet.lambda_private_b.id]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
   
   policy = jsonencode({
     Statement = [
@@ -372,6 +373,7 @@ resource "aws_vpc_endpoint" "sns" {
   vpc_endpoint_type   = "Interface"
   subnet_ids          = [aws_subnet.lambda_private_a.id, aws_subnet.lambda_private_b.id]
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  private_dns_enabled = true
   
   policy = jsonencode({
     Statement = [
