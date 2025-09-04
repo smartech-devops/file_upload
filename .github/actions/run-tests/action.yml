@@ -1,0 +1,199 @@
+name: 'Run CSV Processor Tests'
+description: 'Runs post-deployment validation tests for the CSV processor infrastructure'
+author: 'CSV Processor Team'
+
+inputs:
+  test-phase:
+    description: 'Test phase to run (infrastructure|integration|functional|all)'
+    required: false
+    default: 'all'
+  
+  aws-region:
+    description: 'AWS region where infrastructure is deployed'
+    required: false
+    default: 'eu-north-1'
+  
+  verbose:
+    description: 'Enable verbose test output'
+    required: false
+    default: 'false'
+
+outputs:
+  test-results:
+    description: 'Test execution summary'
+    value: ${{ steps.run-tests.outputs.test-results }}
+  
+  log-file:
+    description: 'Path to the test results log file'
+    value: ${{ steps.run-tests.outputs.log-file }}
+  
+  tests-passed:
+    description: 'Number of tests that passed'
+    value: ${{ steps.run-tests.outputs.tests-passed }}
+  
+  tests-failed:
+    description: 'Number of tests that failed'
+    value: ${{ steps.run-tests.outputs.tests-failed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "🧪 CSV Processor Test Suite"
+        echo "=========================="
+        echo "Test phase: ${{ inputs.test-phase }}"
+        echo "AWS region: ${{ inputs.aws-region }}"
+        echo "Verbose mode: ${{ inputs.verbose }}"
+        echo ""
+        
+        # Validate test phase
+        case "${{ inputs.test-phase }}" in
+          infrastructure|integration|functional|all)
+            echo "✓ Valid test phase specified"
+            ;;
+          *)
+            echo "❌ Invalid test phase: ${{ inputs.test-phase }}"
+            echo "Valid phases: infrastructure, integration, functional, all"
+            exit 1
+            ;;
+        esac
+
+    - name: Check prerequisites
+      shell: bash
+      run: |
+        echo "🔍 Checking test prerequisites..."
+        
+        # Check if AWS CLI is available
+        if ! command -v aws &> /dev/null; then
+          echo "❌ AWS CLI not found"
+          exit 1
+        fi
+        echo "✓ AWS CLI available"
+        
+        # Check if test runner exists
+        if [ ! -f "./tests/run-tests.sh" ]; then
+          echo "❌ Test runner not found at ./tests/run-tests.sh"
+          exit 1
+        fi
+        echo "✓ Test runner found"
+        
+        # Check if test runner is executable
+        if [ ! -x "./tests/run-tests.sh" ]; then
+          echo "❌ Test runner is not executable"
+          exit 1
+        fi
+        echo "✓ Test runner is executable"
+        
+        # Verify AWS credentials
+        if ! aws sts get-caller-identity > /dev/null 2>&1; then
+          echo "❌ AWS credentials not configured or invalid"
+          exit 1
+        fi
+        echo "✓ AWS credentials valid"
+        
+        # Check terraform directory exists
+        if [ ! -d "./terraform" ]; then
+          echo "❌ Terraform directory not found"
+          exit 1
+        fi
+        echo "✓ Terraform directory found"
+        
+        echo "✅ All prerequisites met"
+
+    - name: Run tests
+      id: run-tests
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        AWS_DEFAULT_REGION: ${{ inputs.aws-region }}
+      run: |
+        echo "🚀 Starting test execution..."
+        
+        # Build test command
+        TEST_CMD="./tests/run-tests.sh --phase ${{ inputs.test-phase }}"
+        
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          TEST_CMD="$TEST_CMD --verbose"
+        fi
+        
+        echo "Executing: $TEST_CMD"
+        echo ""
+        
+        # Run tests and capture output
+        if $TEST_CMD; then
+          TEST_EXIT_CODE=0
+          echo "✅ Tests completed successfully"
+        else
+          TEST_EXIT_CODE=$?
+          echo "❌ Tests failed with exit code: $TEST_EXIT_CODE"
+        fi
+        
+        # Find the most recent log file
+        LOG_FILE=$(find ./tests -name "test-results-*.log" -type f -printf '%T@ %p\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2- || echo "")
+        
+        if [ -n "$LOG_FILE" ] && [ -f "$LOG_FILE" ]; then
+          echo "📋 Test log file: $LOG_FILE"
+          
+          # Extract test results from log file
+          TOTAL_TESTS=$(grep "Total Tests:" "$LOG_FILE" | tail -1 | sed 's/.*Total Tests: //' || echo "0")
+          PASSED_TESTS=$(grep "\[PASS\]" "$LOG_FILE" | wc -l || echo "0")
+          FAILED_TESTS=$(grep "\[FAIL\]" "$LOG_FILE" | wc -l || echo "0")
+          
+          echo "📊 Test Results Summary:"
+          echo "   Total Tests: $TOTAL_TESTS"
+          echo "   Passed: $PASSED_TESTS"
+          echo "   Failed: $FAILED_TESTS"
+          
+          # Set outputs
+          echo "test-results=Total: $TOTAL_TESTS, Passed: $PASSED_TESTS, Failed: $FAILED_TESTS" >> $GITHUB_OUTPUT
+          echo "log-file=$LOG_FILE" >> $GITHUB_OUTPUT
+          echo "tests-passed=$PASSED_TESTS" >> $GITHUB_OUTPUT
+          echo "tests-failed=$FAILED_TESTS" >> $GITHUB_OUTPUT
+        else
+          echo "⚠️ No test log file found"
+          echo "test-results=No log file found" >> $GITHUB_OUTPUT
+          echo "log-file=" >> $GITHUB_OUTPUT
+          echo "tests-passed=0" >> $GITHUB_OUTPUT
+          echo "tests-failed=1" >> $GITHUB_OUTPUT
+        fi
+        
+        # Exit with the same code as the test runner
+        exit $TEST_EXIT_CODE
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ github.run_id }}
+        path: |
+          tests/test-results-*.log
+          tests/**/*.log
+        retention-days: 30
+        if-no-files-found: warn
+
+    - name: Test summary
+      if: always()
+      shell: bash
+      run: |
+        echo ""
+        echo "🎯 Test Execution Summary"
+        echo "========================"
+        echo "Phase: ${{ inputs.test-phase }}"
+        echo "Results: ${{ steps.run-tests.outputs.test-results }}"
+        
+        if [ -n "${{ steps.run-tests.outputs.log-file }}" ]; then
+          echo "Log file: ${{ steps.run-tests.outputs.log-file }}"
+          echo ""
+          echo "📄 Test log summary (last 10 lines):"
+          echo "-----------------------------------"
+          tail -10 "${{ steps.run-tests.outputs.log-file }}" 2>/dev/null || echo "Could not read log file"
+        fi
+        
+        echo ""
+        if [ "${{ steps.run-tests.outputs.tests-failed }}" = "0" ]; then
+          echo "🎉 All tests passed successfully!"
+        else
+          echo "💥 Some tests failed. Check the logs for details."
+        fi

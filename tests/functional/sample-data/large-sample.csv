@@ -1,0 +1,11 @@
+id,name,email,department,description
+1,User001,user001@example.com,Engineering,Software engineer with 5+ years experience in full-stack development using modern frameworks and technologies
+2,User002,user002@example.com,Marketing,Digital marketing specialist focused on SEO optimization and content strategy for technology companies
+3,User003,user003@example.com,Sales,Senior sales representative with expertise in B2B software solutions and customer relationship management
+4,User004,user004@example.com,HR,Human resources manager responsible for talent acquisition recruitment and employee development programs
+5,User005,user005@example.com,Engineering,Backend developer specializing in microservices architecture cloud computing and database optimization
+6,User006,user006@example.com,Marketing,Content marketing coordinator creating technical documentation and user-facing communication materials
+7,User007,user007@example.com,Sales,Account manager handling enterprise clients and developing strategic partnership opportunities
+8,User008,user008@example.com,HR,HR business partner supporting organizational development and performance management initiatives
+9,User009,user009@example.com,Engineering,DevOps engineer managing CI/CD pipelines infrastructure automation and monitoring systems
+10,User010,user010@example.com,Marketing,Social media manager developing brand awareness campaigns and community engagement strategies

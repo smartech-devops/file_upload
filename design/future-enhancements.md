@@ -36,19 +36,19 @@
 ### Enhanced CloudWatch Dashboards
 - Create custom dashboards for Lambda metrics
 - Monitor S3 bucket metrics (requests, storage, errors)
-- RDS performance and connection metrics
+- RDS connection metrics
 
 ### Distributed Tracing
 - Implement AWS X-Ray for Lambda function tracing
 - Track request flow from S3 → Lambda → RDS → SNS
-- Identify performance bottlenecks
+- Identify processing bottlenecks
 
 ### Custom Metrics
 - Track business metrics (files processed per day, processing time)
 - Create custom CloudWatch metrics from Lambda
 - Set up alerting on business KPIs
 
-## Performance Optimizations
+## System Optimizations
 
 ### Lambda Function Improvements
 - Implement connection pooling for RDS connections
@@ -76,7 +76,7 @@
 - Unit tests for Lambda function logic
 - Integration tests with test database
 - End-to-end pipeline testing
-- Load testing for performance validation
+- Load testing for system validation
 
 ### Code Quality Tools
 - Implement SonarQube for code quality analysis

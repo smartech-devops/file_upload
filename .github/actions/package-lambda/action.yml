@@ -1,0 +1,293 @@
+name: 'Package Lambda Function'
+description: 'Packages Lambda function code with dependencies into a deployment-ready zip file'
+author: 'CSV Processor Team'
+
+inputs:
+  lambda-directory:
+    description: 'Directory containing Lambda function code'
+    required: false
+    default: 'lambda'
+  
+  output-filename:
+    description: 'Name of the output zip file'
+    required: false
+    default: 'lambda-deployment.zip'
+  
+  requirements-file:
+    description: 'Path to requirements.txt file (relative to lambda-directory)'
+    required: false
+    default: 'requirements.txt'
+  
+  python-version:
+    description: 'Python version to use for packaging'
+    required: false
+    default: '3.9'
+  
+  show-contents:
+    description: 'Display package contents in logs'
+    required: false
+    default: 'true'
+  
+  upload-artifact:
+    description: 'Upload package as GitHub Actions artifact'
+    required: false
+    default: 'false'
+
+outputs:
+  package-path:
+    description: 'Full path to the created deployment package'
+    value: ${{ steps.create-package.outputs.package-path }}
+  
+  package-size:
+    description: 'Size of the deployment package in bytes'
+    value: ${{ steps.create-package.outputs.package-size }}
+  
+  package-size-mb:
+    description: 'Size of the deployment package in MB'
+    value: ${{ steps.create-package.outputs.package-size-mb }}
+  
+  dependencies-count:
+    description: 'Number of dependencies installed'
+    value: ${{ steps.install-deps.outputs.dependencies-count }}
+  
+  within-size-limit:
+    description: 'Whether package is within Lambda size limits (true/false)'
+    value: ${{ steps.validate-package.outputs.within-size-limit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "📦 Lambda Function Packaging"
+        echo "============================"
+        echo "Lambda directory: ${{ inputs.lambda-directory }}"
+        echo "Output filename: ${{ inputs.output-filename }}"
+        echo "Requirements file: ${{ inputs.requirements-file }}"
+        echo "Python version: ${{ inputs.python-version }}"
+        echo "Show contents: ${{ inputs.show-contents }}"
+        echo "Upload artifact: ${{ inputs.upload-artifact }}"
+        echo ""
+        
+        # Check if lambda directory exists
+        if [ ! -d "${{ inputs.lambda-directory }}" ]; then
+          echo "❌ Lambda directory not found: ${{ inputs.lambda-directory }}"
+          exit 1
+        fi
+        echo "✓ Lambda directory found"
+        
+        # Check for Python files
+        PYTHON_FILES=$(find "${{ inputs.lambda-directory }}" -name "*.py" | wc -l)
+        if [ "$PYTHON_FILES" -eq 0 ]; then
+          echo "❌ No Python files found in ${{ inputs.lambda-directory }}"
+          exit 1
+        fi
+        echo "✓ Found $PYTHON_FILES Python files"
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Create package directory
+      shell: bash
+      run: |
+        echo "🏗️ Setting up packaging environment..."
+        
+        # Create temporary packaging directory
+        PACKAGE_DIR="lambda-package-${{ github.run_id }}"
+        mkdir -p "$PACKAGE_DIR"
+        echo "✓ Created package directory: $PACKAGE_DIR"
+        
+        # Copy all Python files from lambda directory
+        find "${{ inputs.lambda-directory }}" -name "*.py" -exec cp {} "$PACKAGE_DIR"/ \;
+        COPIED_FILES=$(find "$PACKAGE_DIR" -name "*.py" | wc -l)
+        echo "✓ Copied $COPIED_FILES Python files"
+        
+        # Copy any additional files (json, txt, etc.) but exclude requirements.txt
+        find "${{ inputs.lambda-directory }}" -type f ! -name "*.py" ! -name "${{ inputs.requirements-file }}" -exec cp {} "$PACKAGE_DIR"/ \; 2>/dev/null || true
+        
+        # Store package directory for next steps
+        echo "PACKAGE_DIR=$PACKAGE_DIR" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      id: install-deps
+      shell: bash
+      run: |
+        echo "📋 Installing Lambda dependencies..."
+        
+        REQUIREMENTS_PATH="${{ inputs.lambda-directory }}/${{ inputs.requirements-file }}"
+        
+        # Check if requirements file exists
+        if [ -f "$REQUIREMENTS_PATH" ]; then
+          echo "✓ Found requirements file: $REQUIREMENTS_PATH"
+          
+          # Display requirements
+          echo "Dependencies to install:"
+          cat "$REQUIREMENTS_PATH"
+          echo ""
+          
+          # Install dependencies to package directory
+          echo "Installing dependencies..."
+          pip install --target "$PACKAGE_DIR" -r "$REQUIREMENTS_PATH" --no-cache-dir --disable-pip-version-check
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Dependencies installed successfully"
+            
+            # Count installed packages
+            DEPS_COUNT=$(find "$PACKAGE_DIR" -maxdepth 1 -type d | grep -v "^$PACKAGE_DIR$" | wc -l)
+            echo "dependencies-count=$DEPS_COUNT" >> $GITHUB_OUTPUT
+            echo "✓ Installed $DEPS_COUNT dependency packages"
+          else
+            echo "❌ Failed to install dependencies"
+            exit 1
+          fi
+        else
+          echo "⚠️ No requirements file found at $REQUIREMENTS_PATH"
+          echo "Skipping dependency installation"
+          echo "dependencies-count=0" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create deployment package
+      id: create-package
+      shell: bash
+      run: |
+        echo "📦 Creating deployment package..."
+        
+        # Navigate to package directory and create zip
+        cd "$PACKAGE_DIR"
+        
+        # Create zip file with maximum compression
+        zip -r9q "../${{ inputs.output-filename }}" .
+        
+        if [ $? -eq 0 ]; then
+          echo "✅ Deployment package created successfully"
+          
+          # Get package information
+          cd ..
+          PACKAGE_PATH="$(pwd)/${{ inputs.output-filename }}"
+          PACKAGE_SIZE=$(stat -f%z "${{ inputs.output-filename }}" 2>/dev/null || stat -c%s "${{ inputs.output-filename }}")
+          PACKAGE_SIZE_MB=$(echo "scale=2; $PACKAGE_SIZE / 1024 / 1024" | bc -l 2>/dev/null || echo "$(($PACKAGE_SIZE / 1024 / 1024))")
+          
+          echo "package-path=$PACKAGE_PATH" >> $GITHUB_OUTPUT
+          echo "package-size=$PACKAGE_SIZE" >> $GITHUB_OUTPUT
+          echo "package-size-mb=$PACKAGE_SIZE_MB" >> $GITHUB_OUTPUT
+          
+          echo "✓ Package path: $PACKAGE_PATH"
+          echo "✓ Package size: $PACKAGE_SIZE bytes ($PACKAGE_SIZE_MB MB)"
+        else
+          echo "❌ Failed to create deployment package"
+          exit 1
+        fi
+
+    - name: Show package contents
+      if: inputs.show-contents == 'true'
+      shell: bash
+      run: |
+        echo "📄 Package Contents"
+        echo "=================="
+        echo "Package: ${{ inputs.output-filename }}"
+        echo "Size: $(ls -lh ${{ inputs.output-filename }} | awk '{print $5}')"
+        echo ""
+        echo "Contents (first 30 items):"
+        unzip -l "${{ inputs.output-filename }}" | head -30
+        echo ""
+        echo "Python files in package:"
+        unzip -l "${{ inputs.output-filename }}" | grep "\.py$" | head -10
+
+    - name: Validate package
+      id: validate-package
+      shell: bash
+      run: |
+        echo "🔍 Validating deployment package..."
+        
+        PACKAGE_SIZE=${{ steps.create-package.outputs.package-size }}
+        
+        # AWS Lambda limits
+        UNZIPPED_LIMIT=262144000  # 250 MB
+        ZIPPED_LIMIT=52428800     # 50 MB
+        
+        echo "Package size: $PACKAGE_SIZE bytes"
+        echo "Zipped limit: $ZIPPED_LIMIT bytes (50 MB)"
+        echo "Unzipped limit: $UNZIPPED_LIMIT bytes (250 MB)"
+        
+        # Check zipped size
+        if [ "$PACKAGE_SIZE" -le "$ZIPPED_LIMIT" ]; then
+          echo "✅ Package size is within Lambda zipped limit (50 MB)"
+          WITHIN_LIMIT="true"
+        else
+          echo "⚠️ Package size exceeds Lambda zipped limit (50 MB)"
+          WITHIN_LIMIT="false"
+        fi
+        
+        # Estimate unzipped size (rough estimate: 3-4x larger)
+        ESTIMATED_UNZIPPED=$((PACKAGE_SIZE * 4))
+        if [ "$ESTIMATED_UNZIPPED" -le "$UNZIPPED_LIMIT" ]; then
+          echo "✅ Estimated unzipped size is within Lambda limit (250 MB)"
+        else
+          echo "⚠️ Estimated unzipped size may exceed Lambda limit (250 MB)"
+          WITHIN_LIMIT="false"
+        fi
+        
+        # Check for common issues
+        echo ""
+        echo "🔍 Package analysis:"
+        
+        # Check for __pycache__ directories (should be excluded)
+        PYCACHE_COUNT=$(unzip -l "${{ inputs.output-filename }}" | grep "__pycache__" | wc -l)
+        if [ "$PYCACHE_COUNT" -gt 0 ]; then
+          echo "⚠️ Found $PYCACHE_COUNT __pycache__ entries (consider excluding)"
+        else
+          echo "✓ No __pycache__ directories found"
+        fi
+        
+        # Check for .pyc files
+        PYC_COUNT=$(unzip -l "${{ inputs.output-filename }}" | grep "\.pyc$" | wc -l)
+        if [ "$PYC_COUNT" -gt 0 ]; then
+          echo "⚠️ Found $PYC_COUNT .pyc files (consider excluding)"
+        else
+          echo "✓ No .pyc files found"
+        fi
+        
+        echo "within-size-limit=$WITHIN_LIMIT" >> $GITHUB_OUTPUT
+
+    - name: Upload package artifact
+      if: inputs.upload-artifact == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: lambda-package-${{ github.run_id }}
+        path: ${{ inputs.output-filename }}
+        retention-days: 7
+
+    - name: Cleanup
+      if: always()
+      shell: bash
+      run: |
+        echo "🧹 Cleaning up temporary files..."
+        
+        # Remove temporary package directory
+        if [ -d "$PACKAGE_DIR" ]; then
+          rm -rf "$PACKAGE_DIR"
+          echo "✓ Removed temporary package directory"
+        fi
+
+    - name: Package summary
+      shell: bash
+      run: |
+        echo ""
+        echo "🎯 Lambda Package Summary"
+        echo "========================"
+        echo "Package: ${{ inputs.output-filename }}"
+        echo "Size: ${{ steps.create-package.outputs.package-size }} bytes (${{ steps.create-package.outputs.package-size-mb }} MB)"
+        echo "Dependencies: ${{ steps.install-deps.outputs.dependencies-count }}"
+        echo "Within limits: ${{ steps.validate-package.outputs.within-size-limit }}"
+        echo "Path: ${{ steps.create-package.outputs.package-path }}"
+        
+        if [ "${{ steps.validate-package.outputs.within-size-limit }}" = "true" ]; then
+          echo ""
+          echo "✅ Lambda package created successfully and ready for deployment!"
+        else
+          echo ""
+          echo "⚠️ Lambda package created but may have size issues. Review the validation warnings above."
+        fi

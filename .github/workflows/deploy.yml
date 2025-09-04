@@ -30,64 +30,24 @@ jobs:
         echo "Connected as:"
         aws sts get-caller-identity
         
-    - name: Install uv
-      uses: astral-sh/setup-uv@v3
-    
-    - name: Package Lambda function
-      run: |
-        # Create a temporary directory for Lambda package
-        mkdir -p lambda-package
-        
-        # Copy Lambda function code
-        cp lambda/lambda_function.py lambda-package/
-        
-        # Install dependencies to target directory
-        uv pip install --target lambda-package boto3 psycopg2-binary
-        
-        # Create deployment zip
-        cd lambda-package
-        zip -r ../lambda-deployment.zip .
-        cd ..
-        
-        echo "Lambda package created: $(ls -lh lambda-deployment.zip)"
-        echo "Package contents (first 20 files):"
-        unzip -l lambda-deployment.zip | head -20
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+    - name: Package Lambda Function
+      uses: ./.github/actions/package-lambda
       with:
-        terraform_version: latest
+        lambda-directory: 'lambda'
+        output-filename: 'lambda-deployment.zip'
+        show-contents: 'true'
     
-    - name: Terraform Init
-      run: |
-        cd terraform
-        terraform init
+    - name: Deploy Infrastructure
+      uses: ./.github/actions/terraform-deploy
+      with:
+        action: 'plan-apply'
+        terraform-directory: 'terraform'
+        auto-approve: 'true'
+        show-plan: 'true'
     
-    - name: Terraform Validate
-      run: |
-        cd terraform
-        terraform validate
-    
-    - name: Terraform Plan
-      run: |
-        cd terraform
-        terraform plan -out=tfplan
-    
-    - name: Terraform Plan Output
-      run: |
-        cd terraform
-        echo "=== Terraform Plan Results ==="
-        terraform show tfplan
-        echo "=============================="
-    
-    - name: Terraform Apply
-      run: |
-        cd terraform
-        terraform apply -auto-approve tfplan
-    
-    - name: Output Infrastructure Info
-      run: |
-        cd terraform
-        echo "=== Infrastructure Deployed ==="
-        terraform output
-        echo "================================"
+    - name: Run Post-Deployment Tests
+      uses: ./.github/actions/run-tests
+      with:
+        test-phase: 'all'
+        aws-region: 'eu-north-1'
+        verbose: 'true'

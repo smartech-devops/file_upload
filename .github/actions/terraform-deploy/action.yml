@@ -1,0 +1,312 @@
+name: 'Terraform Deploy'
+description: 'Flexible Terraform deployment with plan, apply, or plan-apply modes'
+author: 'CSV Processor Team'
+
+inputs:
+  action:
+    description: 'Terraform action to perform (plan|apply|plan-apply)'
+    required: false
+    default: 'plan-apply'
+  
+  terraform-directory:
+    description: 'Directory containing Terraform configuration'
+    required: false
+    default: 'terraform'
+  
+  auto-approve:
+    description: 'Auto-approve apply without confirmation'
+    required: false
+    default: 'true'
+  
+  show-plan:
+    description: 'Display plan output in logs'
+    required: false
+    default: 'true'
+  
+  plan-file:
+    description: 'Name of the plan file to create/use'
+    required: false
+    default: 'tfplan'
+
+outputs:
+  plan-exitcode:
+    description: 'Exit code from terraform plan'
+    value: ${{ steps.terraform-plan.outputs.exitcode }}
+  
+  apply-exitcode:
+    description: 'Exit code from terraform apply (if executed)'
+    value: ${{ steps.terraform-apply.outputs.exitcode }}
+  
+  terraform-outputs:
+    description: 'Terraform outputs in JSON format'
+    value: ${{ steps.get-outputs.outputs.terraform-outputs }}
+  
+  plan-file-path:
+    description: 'Path to the generated plan file'
+    value: ${{ inputs.terraform-directory }}/${{ inputs.plan-file }}
+  
+  has-changes:
+    description: 'Whether the plan contains changes (true/false)'
+    value: ${{ steps.terraform-plan.outputs.has-changes }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "🏗️ Terraform Deployment Action"
+        echo "=============================="
+        echo "Action: ${{ inputs.action }}"
+        echo "Directory: ${{ inputs.terraform-directory }}"
+        echo "Plan file: ${{ inputs.plan-file }}"
+        echo "Auto-approve: ${{ inputs.auto-approve }}"
+        echo "Show plan: ${{ inputs.show-plan }}"
+        echo ""
+        
+        # Validate action input
+        case "${{ inputs.action }}" in
+          plan|apply|plan-apply)
+            echo "✓ Valid action specified"
+            ;;
+          *)
+            echo "❌ Invalid action: ${{ inputs.action }}"
+            echo "Valid actions: plan, apply, plan-apply"
+            exit 1
+            ;;
+        esac
+        
+        # Check if terraform directory exists
+        if [ ! -d "${{ inputs.terraform-directory }}" ]; then
+          echo "❌ Terraform directory not found: ${{ inputs.terraform-directory }}"
+          exit 1
+        fi
+        echo "✓ Terraform directory found"
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: latest
+
+    - name: Terraform Init
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "🔧 Initializing Terraform..."
+        terraform init
+        
+        if [ $? -eq 0 ]; then
+          echo "✅ Terraform initialization completed"
+        else
+          echo "❌ Terraform initialization failed"
+          exit 1
+        fi
+
+    - name: Terraform Validate
+      if: inputs.action == 'plan' || inputs.action == 'plan-apply'
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "🔍 Validating Terraform configuration..."
+        terraform validate
+        
+        if [ $? -eq 0 ]; then
+          echo "✅ Terraform configuration is valid"
+        else
+          echo "❌ Terraform configuration validation failed"
+          exit 1
+        fi
+
+    - name: Terraform Plan
+      id: terraform-plan
+      if: inputs.action == 'plan' || inputs.action == 'plan-apply'
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "📋 Planning Terraform deployment..."
+        
+        # Run terraform plan and capture output
+        if terraform plan -out=${{ inputs.plan-file }} -detailed-exitcode; then
+          PLAN_EXIT_CODE=$?
+        else
+          PLAN_EXIT_CODE=$?
+        fi
+        
+        echo "Plan exit code: $PLAN_EXIT_CODE"
+        
+        # Set outputs based on exit code
+        # 0 = No changes, 1 = Error, 2 = Changes present
+        case $PLAN_EXIT_CODE in
+          0)
+            echo "✅ Plan completed - No changes needed"
+            echo "exitcode=0" >> $GITHUB_OUTPUT
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            ;;
+          1)
+            echo "❌ Plan failed with errors"
+            echo "exitcode=1" >> $GITHUB_OUTPUT
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+          2)
+            echo "✅ Plan completed - Changes detected"
+            echo "exitcode=2" >> $GITHUB_OUTPUT
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            ;;
+          *)
+            echo "❌ Plan failed with unexpected exit code: $PLAN_EXIT_CODE"
+            echo "exitcode=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            exit 1
+            ;;
+        esac
+
+    - name: Show Terraform Plan
+      if: (inputs.action == 'plan' || inputs.action == 'plan-apply') && inputs.show-plan == 'true'
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "📄 Terraform Plan Output"
+        echo "======================="
+        terraform show ${{ inputs.plan-file }}
+        echo "======================="
+
+    - name: Upload Plan File
+      if: inputs.action == 'plan'
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan-${{ github.run_id }}
+        path: ${{ inputs.terraform-directory }}/${{ inputs.plan-file }}
+        retention-days: 30
+
+    - name: Check Plan File for Apply
+      if: inputs.action == 'apply'
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "🔍 Checking for existing plan file..."
+        
+        if [ -f "${{ inputs.plan-file }}" ]; then
+          echo "✅ Plan file found: ${{ inputs.plan-file }}"
+        else
+          echo "❌ Plan file not found: ${{ inputs.plan-file }}"
+          echo "Cannot apply without a plan file. Run 'plan' action first or use 'plan-apply'."
+          exit 1
+        fi
+
+    - name: Terraform Apply
+      id: terraform-apply
+      if: inputs.action == 'apply' || inputs.action == 'plan-apply'
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "🚀 Applying Terraform changes..."
+        
+        # Only apply if there are changes (for plan-apply mode) or if plan file exists (for apply mode)
+        if [ "${{ inputs.action }}" = "plan-apply" ] && [ "${{ steps.terraform-plan.outputs.has-changes }}" = "false" ]; then
+          echo "ℹ️ No changes to apply - skipping apply step"
+          echo "exitcode=0" >> $GITHUB_OUTPUT
+        else
+          # Determine apply command based on auto-approve setting
+          if [ "${{ inputs.auto-approve }}" = "true" ]; then
+            APPLY_CMD="terraform apply -auto-approve ${{ inputs.plan-file }}"
+          else
+            APPLY_CMD="terraform apply ${{ inputs.plan-file }}"
+          fi
+          
+          echo "Running: $APPLY_CMD"
+          
+          if $APPLY_CMD; then
+            APPLY_EXIT_CODE=$?
+            echo "✅ Terraform apply completed successfully"
+            echo "exitcode=$APPLY_EXIT_CODE" >> $GITHUB_OUTPUT
+          else
+            APPLY_EXIT_CODE=$?
+            echo "❌ Terraform apply failed with exit code: $APPLY_EXIT_CODE"
+            echo "exitcode=$APPLY_EXIT_CODE" >> $GITHUB_OUTPUT
+            exit $APPLY_EXIT_CODE
+          fi
+        fi
+
+    - name: Get Terraform Outputs
+      id: get-outputs
+      if: (inputs.action == 'apply' || inputs.action == 'plan-apply') && (steps.terraform-apply.outputs.exitcode == '0' || steps.terraform-apply.outputs.exitcode == '')
+      shell: bash
+      working-directory: ${{ inputs.terraform-directory }}
+      run: |
+        echo "📊 Retrieving Terraform outputs..."
+        
+        # Get outputs in JSON format
+        if terraform output -json > terraform-outputs.json 2>/dev/null; then
+          TERRAFORM_OUTPUTS=$(cat terraform-outputs.json)
+          echo "terraform-outputs=$TERRAFORM_OUTPUTS" >> $GITHUB_OUTPUT
+          
+          echo "✅ Terraform outputs retrieved"
+          echo "Outputs preview:"
+          terraform output
+        else
+          echo "⚠️ No outputs found or error retrieving outputs"
+          echo "terraform-outputs={}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload Terraform State Info
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-state-info-${{ github.run_id }}
+        path: |
+          ${{ inputs.terraform-directory }}/terraform-outputs.json
+          ${{ inputs.terraform-directory }}/${{ inputs.plan-file }}
+        retention-days: 30
+        if-no-files-found: ignore
+
+    - name: Deployment Summary
+      if: always()
+      shell: bash
+      run: |
+        echo ""
+        echo "🎯 Terraform Deployment Summary"
+        echo "==============================="
+        echo "Action: ${{ inputs.action }}"
+        echo "Directory: ${{ inputs.terraform-directory }}"
+        
+        if [ "${{ inputs.action }}" = "plan" ] || [ "${{ inputs.action }}" = "plan-apply" ]; then
+          echo "Plan exit code: ${{ steps.terraform-plan.outputs.exitcode }}"
+          echo "Has changes: ${{ steps.terraform-plan.outputs.has-changes }}"
+        fi
+        
+        if [ "${{ inputs.action }}" = "apply" ] || [ "${{ inputs.action }}" = "plan-apply" ]; then
+          echo "Apply exit code: ${{ steps.terraform-apply.outputs.exitcode }}"
+        fi
+        
+        echo "Plan file: ${{ inputs.terraform-directory }}/${{ inputs.plan-file }}"
+        
+        # Final status
+        if [ "${{ inputs.action }}" = "plan" ]; then
+          if [ "${{ steps.terraform-plan.outputs.exitcode }}" = "0" ] || [ "${{ steps.terraform-plan.outputs.exitcode }}" = "2" ]; then
+            echo ""
+            echo "✅ Planning completed successfully!"
+          else
+            echo ""
+            echo "❌ Planning failed!"
+          fi
+        elif [ "${{ inputs.action }}" = "apply" ]; then
+          if [ "${{ steps.terraform-apply.outputs.exitcode }}" = "0" ]; then
+            echo ""
+            echo "✅ Apply completed successfully!"
+          else
+            echo ""
+            echo "❌ Apply failed!"
+          fi
+        else  # plan-apply
+          if [ "${{ steps.terraform-plan.outputs.exitcode }}" = "0" ] && [ "${{ steps.terraform-apply.outputs.exitcode }}" = "0" ]; then
+            echo ""
+            echo "✅ Deployment completed successfully!"
+          elif [ "${{ steps.terraform-plan.outputs.exitcode }}" != "0" ]; then
+            echo ""
+            echo "❌ Planning phase failed!"
+          else
+            echo ""
+            echo "❌ Apply phase failed!"
+          fi
+        fi

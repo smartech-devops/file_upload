@@ -1,0 +1,11 @@
+id,first_name,last_name,email,age,department,salary,hire_date,active
+1,John,Doe,john.doe@example.com,30,Engineering,75000,2023-01-15,true
+2,Jane,Smith,invalid-email-format,28,Marketing,65000,2023-02-20,true
+3,Bob,Johnson,bob.johnson@example.com,invalid_age,Sales,70000,2023-03-10,true
+4,Alice,Williams,alice.williams@example.com,32,Engineering,invalid_salary,2023-04-05,true
+5,Charlie,Brown,charlie.brown@example.com,29,HR,60000,invalid-date,true
+6,,diana.davis@example.com,31,Marketing,68000,2023-06-18,false
+7,Edward,Miller,,34,Engineering,82000,2023-07-22,true
+8,Fiona,Wilson,fiona.wilson@example.com,27,,63000,2023-08-30,true
+9,George,Moore,george.moore@example.com,33,HR,61500,2023-09-14,
+10,Helen,Taylor,helen.taylor@example.com,-5,Marketing,67500,2023-10-01,true
