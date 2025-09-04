@@ -181,8 +181,8 @@ resource "aws_route_table" "rds_public" {
   }
 }
 
-# Route table for Lambda VPC to reach RDS VPC
-resource "aws_route_table" "lambda_to_rds" {
+# Route table for Lambda VPC private subnets (VPC peering only)
+resource "aws_route_table" "lambda_private" {
   vpc_id = aws_vpc.lambda_vpc.id
 
   route {
@@ -191,7 +191,7 @@ resource "aws_route_table" "lambda_to_rds" {
   }
 
   tags = {
-    Name = "csv-processor-lambda-to-rds-route-table"
+    Name = "csv-processor-lambda-private-rt"
   }
 }
 
@@ -212,12 +212,12 @@ resource "aws_route_table" "rds_to_lambda" {
 # Associate route tables with Lambda subnets
 resource "aws_route_table_association" "lambda_private_a" {
   subnet_id      = aws_subnet.lambda_private_a.id
-  route_table_id = aws_route_table.lambda_to_rds.id
+  route_table_id = aws_route_table.lambda_private.id
 }
 
 resource "aws_route_table_association" "lambda_private_b" {
   subnet_id      = aws_subnet.lambda_private_b.id
-  route_table_id = aws_route_table.lambda_to_rds.id
+  route_table_id = aws_route_table.lambda_private.id
 }
 
 # Associate route tables with public subnets
@@ -280,6 +280,31 @@ resource "aws_security_group" "lambda" {
   }
 }
 
+# Security group for VPC endpoints
+resource "aws_security_group" "vpc_endpoints" {
+  name        = "csv-processor-vpc-endpoints"
+  description = "Security group for VPC endpoints"
+  vpc_id      = aws_vpc.lambda_vpc.id
+
+  ingress {
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.lambda.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "csv-processor-vpc-endpoints-sg"
+  }
+}
+
 resource "aws_security_group" "rds" {
   name        = "csv-processor-rds"
   description = "Security group for RDS instance"
@@ -303,3 +328,67 @@ resource "aws_security_group" "rds" {
     Name = "csv-processor-rds-sg"
   }
 }
+
+# VPC Endpoints for AWS Services
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.lambda_vpc.id
+  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
+  
+  tags = {
+    Name = "csv-processor-s3-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "secrets_manager" {
+  vpc_id              = aws_vpc.lambda_vpc.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.lambda_private_a.id, aws_subnet.lambda_private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  
+  policy = jsonencode({
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = "*"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "csv-processor-secrets-manager-endpoint"
+  }
+}
+
+resource "aws_vpc_endpoint" "sns" {
+  vpc_id              = aws_vpc.lambda_vpc.id
+  service_name        = "com.amazonaws.${data.aws_region.current.name}.sns"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = [aws_subnet.lambda_private_a.id, aws_subnet.lambda_private_b.id]
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+  
+  policy = jsonencode({
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = "*"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "csv-processor-sns-endpoint"
+  }
+}
+
+# Data source for current AWS region
+data "aws_region" "current" {}
