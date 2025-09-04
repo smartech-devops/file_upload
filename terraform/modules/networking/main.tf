@@ -140,6 +140,10 @@ resource "aws_vpc_peering_connection" "lambda_to_rds" {
     allow_remote_vpc_dns_resolution = true
   }
 
+  requester {
+    allow_remote_vpc_dns_resolution = false
+  }
+
   tags = {
     Name = "csv-processor-lambda-to-rds-peering"
   }
