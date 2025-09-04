@@ -331,8 +331,9 @@ resource "aws_security_group" "rds" {
 
 # VPC Endpoints for AWS Services
 resource "aws_vpc_endpoint" "s3" {
-  vpc_id       = aws_vpc.lambda_vpc.id
-  service_name = "com.amazonaws.${data.aws_region.current.name}.s3"
+  vpc_id         = aws_vpc.lambda_vpc.id
+  service_name   = "com.amazonaws.${data.aws_region.current.name}.s3"
+  route_table_ids = [aws_route_table.lambda_private.id]
   
   tags = {
     Name = "csv-processor-s3-endpoint"
