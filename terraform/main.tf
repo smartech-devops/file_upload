@@ -38,6 +38,11 @@ module "monitoring" {
   lambda_function_name = "csv-processor"
 }
 
+# Storage Module (create buckets first)
+module "storage" {
+  source = "./modules/storage"
+}
+
 # Compute Module
 module "compute" {
   source = "./modules/compute"
@@ -62,11 +67,24 @@ module "compute" {
   depends_on = [module.networking, module.database, module.storage, module.monitoring]
 }
 
-# Storage Module (depends on compute for Lambda ARN)
-module "storage" {
-  source = "./modules/storage"
-  lambda_function_arn  = module.compute.lambda_function_arn
-  lambda_function_name = module.compute.lambda_function_name
+# S3 Event Notification (after both storage and compute are created)
+resource "aws_s3_bucket_notification" "input_notification" {
+  bucket = module.storage.input_bucket_id
 
-  depends_on = [module.compute]
+  lambda_function {
+    lambda_function_arn = module.compute.lambda_function_arn
+    events             = ["s3:ObjectCreated:*"]
+    filter_suffix      = ".csv"
+  }
+
+  depends_on = [aws_lambda_permission.s3_invoke]
+}
+
+# Lambda permission for S3 to invoke the function
+resource "aws_lambda_permission" "s3_invoke" {
+  statement_id  = "AllowExecutionFromS3Bucket"
+  action        = "lambda:InvokeFunction"
+  function_name = module.compute.lambda_function_name
+  principal     = "s3.amazonaws.com"
+  source_arn    = module.storage.input_bucket_arn
 }

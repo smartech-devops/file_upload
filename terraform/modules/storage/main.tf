@@ -31,24 +31,3 @@ resource "aws_s3_bucket" "backup" {
   }
 }
 
-# S3 Event Notification to trigger Lambda
-resource "aws_s3_bucket_notification" "input_notification" {
-  bucket = aws_s3_bucket.input.id
-
-  lambda_function {
-    lambda_function_arn = var.lambda_function_arn
-    events             = ["s3:ObjectCreated:*"]
-    filter_suffix      = ".csv"
-  }
-
-  depends_on = [aws_lambda_permission.s3_invoke]
-}
-
-# Lambda permission for S3 to invoke the function
-resource "aws_lambda_permission" "s3_invoke" {
-  statement_id  = "AllowExecutionFromS3Bucket"
-  action        = "lambda:InvokeFunction"
-  function_name = var.lambda_function_name
-  principal     = "s3.amazonaws.com"
-  source_arn    = aws_s3_bucket.input.arn
-}
