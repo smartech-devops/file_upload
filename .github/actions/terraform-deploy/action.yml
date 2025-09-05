@@ -1,0 +1,61 @@
+name: 'Terraform Deploy'
+description: 'Simple Terraform deployment'
+
+inputs:
+  terraform-directory:
+    description: 'Directory containing Terraform configuration'
+    required: false
+    default: 'terraform'
+  show-plan:
+    description: 'Display plan output in logs'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: latest
+    
+    - name: Terraform Init
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        terraform init
+    
+    - name: Terraform Validate
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        terraform validate
+    
+    - name: Terraform Plan
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        terraform plan -out=tfplan
+    
+    - name: Terraform Plan Output
+      if: inputs.show-plan == 'true'
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        echo "=== Terraform Plan Results ==="
+        terraform show tfplan
+        echo "=============================="
+    
+    - name: Terraform Apply
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        terraform apply -auto-approve tfplan
+    
+    - name: Output Infrastructure Info
+      shell: bash
+      run: |
+        cd ${{ inputs.terraform-directory }}
+        echo "=== Infrastructure Deployed ==="
+        terraform output
+        echo "================================"
