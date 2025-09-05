@@ -26,23 +26,22 @@ def lambda_handler(event, context):
         response = s3_client.get_object(Bucket=bucket, Key=key)
         csv_content = response['Body'].read().decode('utf-8')
         
-        # Count rows in CSV
-        csv_reader = csv.reader(csv_content.splitlines())
-        rows_count = sum(1 for row in csv_reader) - 1  # Subtract header row
+        # Calculate file size in KB
+        file_size_bytes = len(csv_content.encode('utf-8'))
+        file_size_kb = round(file_size_bytes / 1024, 2)
         
-        print(f"CSV file has {rows_count} rows")
+        print(f"CSV file size: {file_size_kb} KB")
         
         # Get database credentials from Secrets Manager
         db_credentials = get_db_credentials()
         
         # Store metadata in RDS
-        store_file_metadata(key, rows_count, db_credentials)
+        store_file_metadata(key, file_size_kb, db_credentials)
         
         # Create result file
         result = {
             "filename": key,
-            "rows_count": rows_count,
-            "processed_at": datetime.now().isoformat(),
+            "file_size_kb": file_size_kb,
             "status": "success"
         }
         
@@ -100,7 +99,7 @@ def get_db_credentials():
     response = secrets_client.get_secret_value(SecretId=secret_name)
     return json.loads(response['SecretString'])
 
-def store_file_metadata(filename, rows_count, db_credentials):
+def store_file_metadata(filename, file_size_kb, db_credentials):
     """Store file metadata in RDS PostgreSQL"""
     connection = None
     try:
@@ -121,7 +120,7 @@ def store_file_metadata(filename, rows_count, db_credentials):
             filename VARCHAR(255) NOT NULL,
             status VARCHAR(50) NOT NULL,
             timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            rows_count INTEGER NOT NULL
+            file_size_kb DECIMAL(10,2) NOT NULL
         )
         """
         cursor.execute(create_table_query)
@@ -138,7 +137,7 @@ def store_file_metadata(filename, rows_count, db_credentials):
         
         # Insert file metadata
         insert_query = """
-        INSERT INTO file_metadata (filename, status, timestamp, rows_count)
+        INSERT INTO file_metadata (filename, status, timestamp, file_size_kb)
         VALUES (%s, %s, %s, %s)
         """
         
@@ -146,7 +145,7 @@ def store_file_metadata(filename, rows_count, db_credentials):
             filename,
             'processed',
             datetime.now(),
-            rows_count
+            file_size_kb
         ))
         
         connection.commit()
@@ -169,8 +168,7 @@ def send_notification(result, success=True):
 File processing completed successfully.
 
 Filename: {result['filename']}
-Rows Count: {result['rows_count']}
-Processed At: {result['processed_at']}
+File Size (KB): {result['file_size_kb']}
 Status: {result['status']}
         """
     else:
