@@ -113,6 +113,9 @@ def store_file_metadata(filename, db_credentials):
         
         cursor = connection.cursor()
         
+        # Drop existing table first to ensure clean schema
+        cursor.execute("DROP TABLE IF EXISTS file_metadata CASCADE;")
+        
         # Create table if it doesn't exist
         create_table_query = """
         CREATE TABLE IF NOT EXISTS file_metadata (
