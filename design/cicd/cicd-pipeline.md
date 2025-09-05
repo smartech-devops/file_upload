@@ -8,33 +8,51 @@
 │  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────────────┐ │
 │  │   GitHub Repo   │    │ GitHub Actions   │    │       AWS Resources         │ │
 │  │                 │    │                  │    │                             │ │
-│  │ • Lambda code   │───▶│ • Package code   │───▶│ • Lambda Function           │ │
-│  │ • Workflow YAML │    │ • Deploy Lambda  │    │ • S3 Buckets               │ │
-│  │ • Terraform     │    │ • Run Terraform  │    │ • RDS Instance             │ │
-│  │   files (.tf)   │    │ • Trigger: push  │    │ • SNS Topic                │ │
-│  │                 │    │   to main        │    │ • CloudWatch Alarms        │ │
+│  │ • Lambda code   │───▶│ Composite Actions│───▶│ • Lambda Function           │ │
+│  │ • Workflow YAML │    │ • package-lambda │    │ • S3 Buckets               │ │
+│  │ • Terraform     │    │ • terraform-     │    │ • RDS Instance             │ │
+│  │   files (.tf)   │    │   deploy         │    │ • SNS Topic                │ │
+│  │ • Composite     │    │ • Trigger: PR    │    │ • CloudWatch Alarms        │ │
+│  │   Actions       │    │   to master      │    │ • VPC & Security           │ │
 │  └─────────────────┘    └──────────────────┘    └─────────────────────────────┘ │
+│                                                                                 │
+│                          Branch Protection                                      │
+│                          ┌─────────────────┐                                   │
+│                          │ Master Branch   │                                   │
+│                          │ • No direct     │                                   │
+│                          │   pushes        │                                   │
+│                          │ • PR required   │                                   │
+│                          │ • 1 approval    │                                   │
+│                          └─────────────────┘                                   │
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Pipeline Components
 
-## Terraform Infrastructure Components
+### Composite Actions
+- **package-lambda**: Simplified Lambda packaging action
+  - Creates temporary directory
+  - Copies Lambda code and installs dependencies
+  - Creates deployment zip
+- **terraform-deploy**: Simplified infrastructure deployment
+  - Terraform init, validate, plan, apply workflow
+  - Shows plan output for visibility
 
-- **S3 Buckets**: candidate-test-input, candidate-test-output, candidate-test-backup
-- **Lambda Function**: CSV processor with S3 trigger
-- **RDS Instance**: PostgreSQL database with VPC and security groups
-- **Secrets Manager**: Database credentials storage
-- **SNS Topic**: Notifications with email subscription
-- **CloudWatch Alarms**: Error and duration monitoring
-- **IAM Roles**: Lambda execution role with necessary permissions
-
-## Bootstrap Process
-
-See [Bootstrap Process Design](../bootstrap/bootstrap-process.md) for detailed setup instructions.
+### Branch Protection & PR Workflow
+- **Master Branch Protection**: Prevents direct pushes
+- **PR Requirements**: 1 approval required before merge
+- **Automated Testing**: Each PR triggers full pipeline validation
+- **Merge-based Deployment**: Only approved PRs can deploy to production
 
 ## Code Change Flow
 
-**Before Change**: Lambda returns `rows_count`
-**After Change**: Lambda returns `file_size_kb`
-**Pipeline**: GitHub Actions automatically redeploys the updated Lambda
+1. **Developer creates feature branch** with changes
+2. **Create Pull Request** targeting master branch
+3. **Pipeline triggers** on PR creation/updates:
+   - Package Lambda function
+   - Run Terraform plan (validation only)
+   - Show infrastructure changes
+4. **Code review & approval** (1 reviewer required)
+5. **Merge PR to master** triggers production deployment
+6. **Infrastructure updated** automatically via Terraform apply

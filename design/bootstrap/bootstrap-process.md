@@ -64,11 +64,3 @@ Simple one-time setup to create the GitHub Actions OIDC role for automated deplo
 - **Partition Key**: `LockID` (String)
 - **Billing Mode**: On-demand (cost-effective for low usage)
 
-## Troubleshooting
-
-### Common Issues
-1. **OIDC Provider Already Exists**: Delete existing provider or import into Terraform
-2. **Role Name Conflicts**: Use unique role name or import existing role
-3. **Permission Denied**: Ensure your AWS credentials have IAM admin permissions
-4. **S3 Bucket Name Conflicts**: Bucket names must be globally unique
-5. **State Migration Issues**: Ensure proper backend configuration before migration
