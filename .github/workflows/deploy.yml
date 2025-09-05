@@ -1,9 +1,9 @@
 name: Deploy Infrastructure
 
 on:
-  push:
+  pull_request:
     branches: [ master ]
-  workflow_dispatch:  # Allow manual triggers
+    types: [ opened, synchronize, reopened ]
 
 permissions:
   id-token: write
