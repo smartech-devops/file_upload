@@ -2,6 +2,8 @@
 
 A serverless CSV file processing system built with AWS Lambda, S3, RDS, and SNS.
 
+📋 **Detailed PRDs and documentation can be found in the `design/` folder.**
+
 ## Architecture
 
 - **S3 Buckets**: Input, output, and backup storage
@@ -49,6 +51,14 @@ Push to master branch to trigger automated deployment via GitHub Actions.
 4. Files backed up to backup bucket
 5. Metadata stored in RDS
 6. Email notifications sent via SNS
+
+## Testing
+
+Run the complete test script:
+
+```bash
+./scripts/run-complete-test.sh
+```
 
 ## Development
 

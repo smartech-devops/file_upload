@@ -2,11 +2,6 @@
 
 ## Terraform State Management Improvements
 
-### Current: S3 + DynamoDB Backend
-- **Benefits**: Full AWS control, no external dependencies
-- **Implementation**: Bootstrap creates S3 bucket for state + DynamoDB table for locking
-- **Cost**: Minimal AWS costs for S3 and DynamoDB
-
 ### Future Enhancement: Terraform Cloud
 - **Benefits**: No AWS resources needed for state, built-in state locking, web UI, team collaboration
 - **Setup**: Create Terraform Cloud account, configure remote backend
@@ -14,12 +9,26 @@
 - **Authentication**: API token for GitHub Actions
 - **Migration**: Can migrate from S3 backend to Terraform Cloud when ready
 
-## Security Enhancements
+## CI/CD Enhancements
 
-### Branch Protection Rules
-- Require pull request reviews before merging to main
-- Require status checks to pass (tests, linting, security scans)
-- Restrict push access to main branch
+### Branch Protection & PR Workflow
+- **Master Branch Protection**: Prevents direct pushes
+- **PR Requirements**: 1 approval required before merge
+- **Automated Testing**: Each PR triggers full pipeline validation
+- **Merge-based Deployment**: Only approved PRs can deploy to production
+
+### Enhanced Code Change Flow
+1. **Developer creates feature branch** with changes
+2. **Create Pull Request** targeting master branch
+3. **Pipeline triggers** on PR creation/updates:
+   - Package Lambda function
+   - Run Terraform plan (validation only)
+   - Show infrastructure changes
+4. **Code review & approval** (1 reviewer required)
+5. **Merge PR to master** triggers production deployment
+6. **Infrastructure updated** automatically via Terraform apply
+
+## Security Enhancements
 
 ### AWS Resource Tagging Strategy
 - Implement consistent tagging across all resources
@@ -73,27 +82,12 @@
 - Pre-commit hooks for code quality
 
 ### Hybrid Infrastructure Management
-- **Current**: Full Terraform for all infrastructure including Lambda
-- **Future**: Serverless Framework for Lambda only, Terraform for everything else
-- **Architecture**:
-  - **Terraform**: VPC, RDS, S3 buckets, IAM roles, security groups, networking
-  - **Serverless**: Lambda function deployment, packaging, and configuration only
-- **Benefits**: 
-  - Best tool for each job - Terraform for infrastructure, Serverless for Lambda
-  - Simplified Lambda development and dependency management
-  - Automatic packaging and deployment for Lambda functions
-  - Keep existing Terraform infrastructure unchanged
-- **Implementation**:
-  - Create `serverless.yml` for Lambda function only
-  - Remove Lambda resources from Terraform
-  - Use Terraform outputs as inputs to Serverless (bucket names, VPC IDs, etc.)
-  - Maintain single deployment pipeline with both tools
+- Serverless Framework for Lambda only, Terraform for everything else
 
 ### Testing Strategy
 - Unit tests for Lambda function logic
 - Integration tests with test database
 - End-to-end pipeline testing
-- Load testing for performance validation
 
 ### Code Quality Tools
 - Implement SonarQube for code quality analysis
@@ -106,16 +100,6 @@
 - Deploy infrastructure in multiple AWS regions
 - Implement cross-region replication for data backup
 - Consider disaster recovery strategies
-
-### Event-Driven Architecture
-- Replace direct Lambda triggers with SQS/SNS for better decoupling
-- Implement dead letter queues for failed processing
-- Add retry logic with exponential backoff
-
-### Microservices Architecture
-- Split Lambda function into smaller, focused functions
-- Implement API Gateway for service orchestration
-- Use Step Functions for complex workflow orchestration
 
 ## Cost Optimization
 
