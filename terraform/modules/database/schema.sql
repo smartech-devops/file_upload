@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS file_metadata (
     id SERIAL PRIMARY KEY,
     filename VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL,
-    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    rows_count INTEGER NOT NULL
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create index on filename for faster lookups

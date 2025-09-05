@@ -52,3 +52,24 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   })
 }
 
+# Initialize database schema
+resource "null_resource" "init_database_schema" {
+  depends_on = [aws_db_instance.postgres, aws_secretsmanager_secret_version.db_credentials]
+
+  provisioner "local-exec" {
+    command = <<EOF
+      PGPASSWORD='${random_password.db_password.result}' psql \
+        -h ${aws_db_instance.postgres.address} \
+        -p ${aws_db_instance.postgres.port} \
+        -U ${var.db_username} \
+        -d ${aws_db_instance.postgres.db_name} \
+        -f ${path.module}/schema.sql
+    EOF
+  }
+
+  triggers = {
+    schema_file_hash = filemd5("${path.module}/schema.sql")
+    db_instance_id   = aws_db_instance.postgres.id
+  }
+}
+
