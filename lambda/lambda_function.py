@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         db_credentials = get_db_credentials()
         
         # Store metadata in RDS
-        store_file_metadata(key, file_size_kb, db_credentials)
+        store_file_metadata(key, db_credentials)
         
         # Create result file
         result = {
@@ -99,7 +99,7 @@ def get_db_credentials():
     response = secrets_client.get_secret_value(SecretId=secret_name)
     return json.loads(response['SecretString'])
 
-def store_file_metadata(filename, file_size_kb, db_credentials):
+def store_file_metadata(filename, db_credentials):
     """Store file metadata in RDS PostgreSQL"""
     connection = None
     try:
@@ -119,8 +119,7 @@ def store_file_metadata(filename, file_size_kb, db_credentials):
             id SERIAL PRIMARY KEY,
             filename VARCHAR(255) NOT NULL,
             status VARCHAR(50) NOT NULL,
-            timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            file_size_kb DECIMAL(10,2) NOT NULL
+            timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
         """
         cursor.execute(create_table_query)
@@ -137,15 +136,14 @@ def store_file_metadata(filename, file_size_kb, db_credentials):
         
         # Insert file metadata
         insert_query = """
-        INSERT INTO file_metadata (filename, status, timestamp, file_size_kb)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO file_metadata (filename, status, timestamp)
+        VALUES (%s, %s, %s)
         """
         
         cursor.execute(insert_query, (
             filename,
             'processed',
-            datetime.now(),
-            file_size_kb
+            datetime.now()
         ))
         
         connection.commit()
