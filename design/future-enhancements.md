@@ -9,6 +9,22 @@
 - **Authentication**: API token for GitHub Actions
 - **Migration**: Can migrate from S3 backend to Terraform Cloud when ready
 
+### Database Schema Management via Terraform
+- **Current**: Lambda creates schema on-the-fly during first execution
+- **Future Enhancement**: Terraform-managed database schema initialization
+- **Attempted Implementation**: 
+  - Tested on branch `composite_actions`
+  - Used RDS Data API with `aws_rdsdata_statement` resources
+  - Failed due to `enable_http_endpoint = true` not supported on standard RDS PostgreSQL
+- **Research Required**: 
+  - Data API only works with Aurora Serverless clusters
+  - See [AWS RDS Data API Documentation](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/data-api.html)
+  - Alternative: Consider Aurora Serverless v2 or different schema initialization approach
+- **Alternative Approaches**:
+  - Use `local-exec` provisioner with `psql` client
+  - Lambda-based schema migration on deployment
+  - Database migration tools integration
+
 ## CI/CD Enhancements
 
 ### Branch Protection & PR Workflow
