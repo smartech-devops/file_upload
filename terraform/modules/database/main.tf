@@ -35,6 +35,9 @@ resource "aws_db_instance" "postgres" {
   skip_final_snapshot = var.skip_final_snapshot
   deletion_protection = var.deletion_protection
 
+  # Enable Data API for serverless-like access
+  enable_http_endpoint = true
+
   tags = {
     Name = "csv-processor-database"
   }
@@ -52,24 +55,36 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
   })
 }
 
-# Initialize database schema
-resource "null_resource" "init_database_schema" {
+# Initialize database schema using RDS Data API
+resource "aws_rdsdata_statement" "create_file_metadata_table" {
   depends_on = [aws_db_instance.postgres, aws_secretsmanager_secret_version.db_credentials]
 
-  provisioner "local-exec" {
-    command = <<EOF
-      PGPASSWORD='${random_password.db_password.result}' psql \
-        -h ${aws_db_instance.postgres.address} \
-        -p ${aws_db_instance.postgres.port} \
-        -U ${var.db_username} \
-        -d ${aws_db_instance.postgres.db_name} \
-        -f ${path.module}/schema.sql
-    EOF
-  }
+  resource_arn = aws_db_instance.postgres.arn
+  secret_arn   = aws_secretsmanager_secret.db_credentials.arn
+  database     = aws_db_instance.postgres.db_name
+  
+  sql = <<-EOT
+    CREATE TABLE IF NOT EXISTS file_metadata (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) NOT NULL,
+        status VARCHAR(50) NOT NULL,
+        timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  EOT
+}
 
-  triggers = {
-    schema_file_hash = filemd5("${path.module}/schema.sql")
-    db_instance_id   = aws_db_instance.postgres.id
-  }
+# Create indexes using separate statements
+resource "aws_rdsdata_statement" "create_indexes" {
+  depends_on = [aws_rdsdata_statement.create_file_metadata_table]
+
+  resource_arn = aws_db_instance.postgres.arn
+  secret_arn   = aws_secretsmanager_secret.db_credentials.arn
+  database     = aws_db_instance.postgres.db_name
+  
+  sql = <<-EOT
+    CREATE INDEX IF NOT EXISTS idx_file_metadata_filename ON file_metadata(filename);
+    CREATE INDEX IF NOT EXISTS idx_file_metadata_timestamp ON file_metadata(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_file_metadata_status ON file_metadata(status);
+  EOT
 }
 
