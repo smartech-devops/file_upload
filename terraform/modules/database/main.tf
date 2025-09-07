@@ -32,6 +32,7 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [var.rds_security_group_id]
   db_subnet_group_name   = var.db_subnet_group_name
 
+  auto_minor_version_upgrade = false
   skip_final_snapshot = var.skip_final_snapshot
   deletion_protection = var.deletion_protection
 
