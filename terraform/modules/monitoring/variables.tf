@@ -3,6 +3,12 @@ variable "notification_email" {
   type        = string
 }
 
+variable "notification_email_secondary" {
+  description = "Secondary email address for SNS notifications"
+  type        = string
+  default     = "uria.asher@smartech.com"
+}
+
 variable "lambda_function_name" {
   description = "Name of the Lambda function to monitor"
   type        = string
