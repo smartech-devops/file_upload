@@ -14,6 +14,14 @@ resource "aws_sns_topic_subscription" "email" {
   endpoint  = var.notification_email
 }
 
+# SNS Topic Subscription - Secondary Email
+resource "aws_sns_topic_subscription" "email_secondary" {
+  count     = var.notification_email_secondary != "" ? 1 : 0
+  topic_arn = aws_sns_topic.notifications.arn
+  protocol  = "email"
+  endpoint  = var.notification_email_secondary
+}
+
 # CloudWatch Alarm for Lambda Errors
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_name          = "csv-processor-lambda-errors"

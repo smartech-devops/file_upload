@@ -34,8 +34,9 @@ module "database" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  notification_email  = var.notification_email
-  lambda_function_name = "csv-processor"
+  notification_email           = var.notification_email
+  notification_email_secondary = var.notification_email_secondary
+  lambda_function_name         = "csv-processor"
 }
 
 # Storage Module (create buckets first)

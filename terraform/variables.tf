@@ -11,3 +11,9 @@ variable "notification_email" {
   default     = "smartech.devops.test@gmail.com"
 }
 
+variable "notification_email_secondary" {
+  description = "Secondary email address for SNS notifications"
+  type        = string
+  default     = "uria.asher@smartech.com"
+}
+
