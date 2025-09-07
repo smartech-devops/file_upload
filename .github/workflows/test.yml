@@ -1,0 +1,42 @@
+name: Run Complete Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      notification_email:
+        description: 'Email address for test notifications'
+        required: false
+        type: string
+        default: 'smartech.devops.test@gmail.com'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        role-session-name: GitHubActions-Test-${{ github.run_id }}
+        aws-region: eu-north-1
+        audience: sts.amazonaws.com
+    
+    - name: Make test script executable
+      working-directory: tests
+      run: chmod +x run_complete_test.sh
+    
+    - name: Run complete test suite
+      working-directory: tests
+      run: |
+        echo "Running tests with notification email: ${{ inputs.notification_email }}"
+        ./run_complete_test.sh
+      env:
+        NOTIFICATION_EMAIL: ${{ inputs.notification_email }}
