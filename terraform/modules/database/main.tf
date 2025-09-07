@@ -1,3 +1,44 @@
+# DB Parameter Group with logging enabled
+resource "aws_db_parameter_group" "postgres_logging" {
+  family = "postgres15"
+  name   = "${var.db_identifier}-logging"
+  description = "PostgreSQL parameter group with comprehensive logging"
+
+  parameter {
+    name  = "log_statement"
+    value = "all"  # Log all statements (DDL, DML, etc.)
+  }
+
+  parameter {
+    name  = "log_min_duration_statement"
+    value = "0"  # Log all queries (set to higher value like 1000 to only log slow queries)
+  }
+
+  parameter {
+    name  = "log_connections"
+    value = "1"  # Log connection attempts
+  }
+
+  parameter {
+    name  = "log_disconnections"
+    value = "1"  # Log disconnections
+  }
+
+  parameter {
+    name  = "log_checkpoints"
+    value = "1"  # Log checkpoints
+  }
+
+  parameter {
+    name  = "log_lock_waits"
+    value = "1"  # Log lock waits
+  }
+
+  tags = {
+    Name = "${var.db_identifier}-parameter-group"
+  }
+}
+
 # Random password for RDS
 resource "random_password" "db_password" {
   length  = 16
@@ -16,7 +57,7 @@ resource "aws_secretsmanager_secret" "db_credentials" {
 
 # RDS PostgreSQL Instance
 resource "aws_db_instance" "postgres" {
-  identifier = "csv-processor-db"
+  identifier = var.db_identifier
 
   engine         = var.db_engine
   engine_version = var.db_engine_version
@@ -31,6 +72,9 @@ resource "aws_db_instance" "postgres" {
 
   vpc_security_group_ids = [var.rds_security_group_id]
   db_subnet_group_name   = var.db_subnet_group_name
+
+  # Use custom parameter group for logging
+  parameter_group_name = aws_db_parameter_group.postgres_logging.name
 
   auto_minor_version_upgrade = false
   skip_final_snapshot = var.skip_final_snapshot

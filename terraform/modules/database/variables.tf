@@ -61,3 +61,9 @@ variable "db_subnet_group_name" {
   description = "Name of the DB subnet group"
   type        = string
 }
+
+variable "db_identifier" {
+  description = "DB instance identifier"
+  type        = string
+  default     = "csv-processor-db"
+}
