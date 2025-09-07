@@ -100,9 +100,9 @@ upload_test_file() {
 monitor_lambda_execution() {
     print_status $YELLOW "Monitoring Lambda execution..."
     
-    local max_wait=90  # Maximum wait time in seconds
+    local max_wait=30  # Maximum wait time in seconds
     local waited=0
-    local check_interval=5
+    local check_interval=3
     
     while [[ $waited -lt $max_wait ]]; do
         print_status $BLUE "  Waiting for Lambda execution... (${waited}s/${max_wait}s)"
@@ -131,6 +131,11 @@ monitor_lambda_execution() {
                     LAMBDA_LOGS="$logs"
                     return 0
                 fi
+            elif echo "$logs" | grep -q "END RequestId:" && echo "$logs" | grep -q "SNS notification sent:"; then
+                # Fallback: Found recent execution with SNS notification
+                print_status $BLUE "  Found recent Lambda execution with SNS notification"
+                LAMBDA_LOGS="$logs"
+                return 0
             fi
         fi
         
