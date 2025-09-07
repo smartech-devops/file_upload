@@ -7,7 +7,7 @@ variable "db_engine" {
 variable "db_engine_version" {
   description = "Database engine version"
   type        = string
-  default     = "15.8"
+  default     = "15.12"
 }
 
 variable "db_instance_class" {
@@ -60,4 +60,10 @@ variable "rds_security_group_id" {
 variable "db_subnet_group_name" {
   description = "Name of the DB subnet group"
   type        = string
+}
+
+variable "db_identifier" {
+  description = "DB instance identifier"
+  type        = string
+  default     = "csv-processor-db"
 }
